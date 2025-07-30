@@ -1,0 +1,25 @@
+# Shopify App Configuration File
+# This file is used by Shopify CLI for app development
+
+name = "whatsapp-launcher"
+client_id = "your_shopify_api_key_here"
+application_url = "http://localhost:8000"
+embedded = true
+
+[access_scopes]
+scopes = "read_themes,write_themes,read_script_tags,write_script_tags"
+
+[auth]
+redirect_urls = [
+  "http://localhost:8000/auth/callback"
+]
+
+[webhooks]
+api_version = "2023-10"
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "your-dev-store.myshopify.com"

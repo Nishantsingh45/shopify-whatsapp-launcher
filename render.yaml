@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: shopify-whatsapp-launcher
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: SHOPIFY_API_KEY
+        sync: false
+      - key: SHOPIFY_API_SECRET
+        sync: false
+      - key: APP_URL
+        value: https://shopify-whatsapp-launcher.onrender.com
+      - key: PORT
+        value: 8000
+    healthCheckPath: /health
+    disk:
+      name: app-data
+      mountPath: /app/data
+      sizeGB: 1

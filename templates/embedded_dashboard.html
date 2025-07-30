@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Launcher</title>
+    <!-- <script src="https://unpkg.com/@shopify/app-bridge@3"></script> -->
+    <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+    <script>
+        // Polyfill for App Bridge if it fails to load
+        window.AppBridgeLoaded = false;
+        
+        // Check if App Bridge loaded successfully
+        setTimeout(() => {
+            if (window.shopify && window.shopify.AppBridge) {
+                window.AppBridgeLoaded = true;
+                console.log('Shopify App Bridge loaded successfully');
+            } else if (window.AppBridge) {
+                window.AppBridgeLoaded = true;
+                console.log('App Bridge loaded successfully');
+            } else {
+                console.warn('App Bridge failed to load, using fallback mode');
+                window.AppBridgeLoaded = false;
+            }
+        }, 500);
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            color: #25D366;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .form-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        input[type="text"], input[type="tel"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e1e5e9;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+        
+        input[type="text"]:focus, input[type="tel"]:focus, textarea:focus {
+            outline: none;
+            border-color: #25D366;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .submit-btn {
+            background-color: #25D366;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            width: 100%;
+        }
+        
+        .submit-btn:hover {
+            background-color: #128C7E;
+        }
+        
+        .submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .success-message, .error-message {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .current-config {
+            background-color: #f8f9fa;
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            border-left: 4px solid #25D366;
+        }
+        
+        .current-config h3 {
+            color: #25D366;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+        
+        .config-item {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .config-label {
+            font-weight: 600;
+            color: #666;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .widget-preview {
+            background-color: #f8f9fa;
+            padding: 16px;
+            border-radius: 6px;
+            margin-top: 16px;
+            border: 1px solid #e1e5e9;
+            text-align: center;
+        }
+        
+        .widget-preview h3 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .preview-icon {
+            width: 50px;
+            height: 50px;
+            background-color: #25D366;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 8px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 WhatsApp Launcher</h1>
+        </div>
+        
+        <div id="loading" class="loading">
+            Loading configuration...
+        </div>
+        
+        <div id="app-content" style="display: none;">
+            <div id="message-container"></div>
+            
+            <div id="current-config-container"></div>
+            
+            <div class="form-container">
+                <h2 style="margin-bottom: 16px; font-size: 18px;">Configure WhatsApp Widget</h2>
+                <p style="margin-bottom: 16px; color: #666; font-size: 14px;">
+                    Set up your WhatsApp contact details. A floating widget will appear on your store for customers to contact you directly.
+                </p>
+                
+                <form id="whatsapp-form">
+                    <div class="form-group">
+                        <label for="phone_number">WhatsApp Phone Number</label>
+                        <input 
+                            type="tel" 
+                            id="phone_number" 
+                            name="phone_number" 
+                            placeholder="+1234567890" 
+                            required
+                        >
+                        <div class="help-text">
+                            Include country code (e.g., +1 for US, +44 for UK)
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="initial_message">Initial Message</label>
+                        <textarea 
+                            id="initial_message" 
+                            name="initial_message" 
+                            placeholder="Hi! I'm interested in your products..."
+                            required
+                        ></textarea>
+                        <div class="help-text">
+                            This message will be pre-filled when customers click the WhatsApp widget
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="submit-btn" id="submit-btn">
+                        Save Configuration
+                    </button>
+                </form>
+                
+                <div class="widget-preview">
+                    <h3>Widget Preview</h3>
+                    <p style="font-size: 14px; margin-bottom: 8px;">This is how the WhatsApp widget will appear on your store:</p>
+                    <div class="preview-icon">
+                        <svg width="25" height="25" viewBox="0 0 24 24" fill="white">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+                        </svg>
+                    </div>
+                    <p style="font-size: 12px; color: #666;">
+                        The widget will appear in the bottom-right corner of your store
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Wait for App Bridge to load
+        let app;
+        let isAppBridgeReady = false;
+
+        // Initialize Shopify App Bridge when it's available
+        function initializeAppBridge() {
+            try {
+                if (window.shopify && window.shopify.AppBridge) {
+                    app = window.shopify.AppBridge.createApp({
+                        apiKey: '{{ api_key }}',
+                        host: new URLSearchParams(window.location.search).get('host')
+                    });
+                    isAppBridgeReady = true;
+                    console.log('App Bridge initialized successfully');
+                } else if (window.AppBridge) {
+                    app = window.AppBridge.createApp({
+                        apiKey: '{{ api_key }}',
+                        host: new URLSearchParams(window.location.search).get('host')
+                    });
+                    isAppBridgeReady = true;
+                    console.log('App Bridge initialized successfully');
+                } else {
+                    console.warn('App Bridge not available, falling back to non-embedded mode');
+                    isAppBridgeReady = false;
+                }
+            } catch (error) {
+                console.error('Error initializing App Bridge:', error);
+                isAppBridgeReady = false;
+            }
+        }
+
+        // Get session token for API calls
+        async function getSessionToken() {
+            if (!isAppBridgeReady || !app) {
+                // Fallback: try to get token from URL or use a placeholder
+                const urlParams = new URLSearchParams(window.location.search);
+                const shop = urlParams.get('shop');
+                if (shop) {
+                    // For development/testing, we'll use the shop parameter
+                    return `dev-token-${shop}`;
+                }
+                return 'dev-token';
+            }
+
+            return new Promise((resolve, reject) => {
+                try {
+                    if (app.getState) {
+                        app.getState().then((state) => {
+                            resolve(state.sessionToken);
+                        }).catch(reject);
+                    } else {
+                        // Fallback for older App Bridge versions
+                        resolve('fallback-token');
+                    }
+                } catch (error) {
+                    console.error('Error getting session token:', error);
+                    resolve('fallback-token');
+                }
+            });
+        }
+
+        // Show message
+        function showMessage(message, type = 'success') {
+            const container = document.getElementById('message-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type === 'success' ? 'success-message' : 'error-message';
+            messageDiv.textContent = message;
+            container.innerHTML = '';
+            container.appendChild(messageDiv);
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+
+        // Load current configuration
+        async function loadConfig() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const shop = urlParams.get('shop');
+                
+                let headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                // Try to get session token, but don't fail if it's not available
+                try {
+                    const sessionToken = await getSessionToken();
+                    if (sessionToken && sessionToken !== 'fallback-token' && sessionToken !== 'dev-token') {
+                        headers['Authorization'] = `Bearer ${sessionToken}`;
+                    }
+                } catch (error) {
+                    console.log('Session token not available, using fallback');
+                }
+                
+                // If we don't have a proper session token, use the shop parameter directly
+                let url = '/api/config';
+                if (shop && (!headers['Authorization'] || headers['Authorization'].includes('fallback') || headers['Authorization'].includes('dev-token'))) {
+                    url = `/api/config-fallback?shop=${shop}`;
+                    delete headers['Authorization'];
+                }
+                
+                const response = await fetch(url, { headers });
+
+                if (response.ok) {
+                    const config = await response.json();
+                    
+                    // Populate form
+                    if (config.phone_number) {
+                        document.getElementById('phone_number').value = config.phone_number;
+                    }
+                    if (config.initial_message) {
+                        document.getElementById('initial_message').value = config.initial_message;
+                    } else {
+                        document.getElementById('initial_message').value = 'Hi! I have a question about your products.';
+                    }
+
+                    // Show current config if exists
+                    if (config.phone_number && config.initial_message) {
+                        showCurrentConfig(config);
+                    }
+                } else {
+                    console.error('Failed to load config:', response.status);
+                    showMessage('Error loading configuration', 'error');
+                }
+            } catch (error) {
+                console.error('Error loading config:', error);
+                showMessage('Error loading configuration', 'error');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('app-content').style.display = 'block';
+            }
+        }
+
+        // Show current configuration
+        function showCurrentConfig(config) {
+            const container = document.getElementById('current-config-container');
+            container.innerHTML = `
+                <div class="current-config">
+                    <h3>Current Configuration</h3>
+                    <div class="config-item">
+                        <span class="config-label">Phone Number:</span> ${config.phone_number}
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">Initial Message:</span> ${config.initial_message}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Handle form submission
+        document.getElementById('whatsapp-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+
+            try {
+                const formData = new FormData(e.target);
+                const urlParams = new URLSearchParams(window.location.search);
+                const shop = urlParams.get('shop');
+                
+                const data = {
+                    phone_number: formData.get('phone_number'),
+                    initial_message: formData.get('initial_message'),
+                    shop: shop // Include shop as fallback
+                };
+
+                let headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                // Try to get session token, but don't fail if it's not available
+                try {
+                    const sessionToken = await getSessionToken();
+                    if (sessionToken && sessionToken !== 'fallback-token' && sessionToken !== 'dev-token') {
+                        headers['Authorization'] = `Bearer ${sessionToken}`;
+                    }
+                } catch (error) {
+                    console.log('Session token not available, using fallback');
+                }
+
+                const response = await fetch('/api/configure-whatsapp', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage('✅ WhatsApp configuration updated successfully! The widget is now live on your store.');
+                    showCurrentConfig(data);
+                    submitBtn.textContent = 'Update Configuration';
+                } else {
+                    showMessage(result.detail || 'Error saving configuration', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving config:', error);
+                showMessage('Error saving configuration', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                if (submitBtn.textContent === 'Saving...') {
+                    submitBtn.textContent = 'Save Configuration';
+                }
+            }
+        });
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Wait a bit for App Bridge to load
+            setTimeout(() => {
+                initializeAppBridge();
+                loadConfig();
+            }, 100);
+        });
+
+        // Also try to initialize immediately in case DOMContentLoaded already fired
+        initializeAppBridge();
+        loadConfig();
+    </script>
+</body>
+</html>
