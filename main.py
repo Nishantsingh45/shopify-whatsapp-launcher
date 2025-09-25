@@ -270,7 +270,7 @@ async def api_configure_whatsapp(
     db.save_whatsapp_config(shop, phone_number, initial_message)
     
     # Install script tag in Shopify store
-    await install_script_tag(shop)
+    #await install_script_tag(shop)
     
     return JSONResponse({"success": True, "message": "Configuration saved successfully"})
 
