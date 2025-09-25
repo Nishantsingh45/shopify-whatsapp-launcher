@@ -129,7 +129,7 @@ async def install(shop: str):
     }
     
     # auth_url = f"https://{shop}.myshopify.com/admin/oauth/authorize?" + urlencode(params)
-    auth_url = f"https://{shop}.com/admin/oauth/authorize?" + urlencode(params)
+    auth_url = f"https://{shop}/admin/oauth/authorize?" + urlencode(params)
     return RedirectResponse(url=auth_url)
 
 @app.get("/auth/callback")
