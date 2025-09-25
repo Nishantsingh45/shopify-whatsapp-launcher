@@ -174,7 +174,8 @@ async def dashboard(request: Request, shop: str):
     installation = db.get_installation(shop)
     if not installation:
         return RedirectResponse(url=f"/install?shop={shop}")
-    
+    if not shop_has_active_subscription(shop):
+        return RedirectResponse(url=f"/pricing?shop={shop}")
     current_config = db.get_whatsapp_config(shop) or {}
     
     return templates.TemplateResponse("dashboard.html", {
@@ -505,6 +506,46 @@ async def app_uninstalled(request: Request, x_shopify_hmac_sha256: str = Header(
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+#############################
+def plan_selection_url(shop: str) -> str:
+    # shop looks like "mystore.myshopify.com"
+    store_handle = shop.replace(".myshopify.com", "")
+    app_handle = os.getenv("APP_URL")
+    # Shopify-hosted plan selection page
+    return f"https://admin.shopify.com/store/{store_handle}/charges/{app_handle}/pricing_plans"
+
+@app.get("/pricing")
+async def pricing(shop: str):
+    if not shop:
+        raise HTTPException(status_code=400, detail="Shop parameter required")
+    return RedirectResponse(url=plan_selection_url(shop))
+def shop_has_active_subscription(shop: str) -> bool:
+    installation = db.get_installation(shop)
+    if not installation:
+        return False
+    access_token = installation["access_token"]
+    query = """
+    query {
+      currentAppInstallation {
+        activeSubscriptions {
+          id
+          status
+        }
+      }
+    }
+    """
+    r = requests.post(
+        f"https://{shop}/admin/api/2023-10/graphql.json",
+        headers={
+            "X-Shopify-Access-Token": access_token,
+            "Content-Type": "application/json",
+        },
+        json={"query": query},
+        timeout=20,
+    )
+    data = r.json()
+    subs = (data.get("data", {}) or {}).get("currentAppInstallation", {}).get("activeSubscriptions", [])
+    return any(s.get("status") in ("ACTIVE", "TRIAL") for s in subs)
 
 if __name__ == "__main__":
     import uvicorn
