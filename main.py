@@ -325,7 +325,44 @@ async def configure_whatsapp(
     await install_script_tag(shop)
     
     return RedirectResponse(url=f"/dashboard?shop={shop}&success=1", status_code=303)
-
+@app.get("/debug/script-tags/{shop}")
+async def debug_script_tags(shop: str):
+    """Debug endpoint to check script tags"""
+    installation = db.get_installation(shop)
+    if not installation:
+        return {"error": "App not installed"}
+    
+    access_token = installation["access_token"]
+    headers = {
+        "X-Shopify-Access-Token": access_token,
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.get(
+            f"https://{shop}/admin/api/2023-10/script_tags.json",
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            script_tags = response.json().get("script_tags", [])
+            return {
+                "status": "success",
+                "count": len(script_tags),
+                "script_tags": script_tags,
+                "widget_scripts": [
+                    tag for tag in script_tags 
+                    if APP_URL in tag.get("src", "")
+                ]
+            }
+        else:
+            return {
+                "status": "error",
+                "status_code": response.status_code,
+                "response": response.text
+            }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 async def install_script_tag(shop: str):
     """Install script tag in Shopify store"""
     installation = db.get_installation(shop)
