@@ -174,8 +174,8 @@ async def dashboard(request: Request, shop: str):
     installation = db.get_installation(shop)
     if not installation:
         return RedirectResponse(url=f"/install?shop={shop}")
-    if not shop_has_active_subscription(shop):
-        return RedirectResponse(url=f"/pricing?shop={shop}")
+    # if not shop_has_active_subscription(shop):
+    #     return RedirectResponse(url=f"/pricing?shop={shop}")
     current_config = db.get_whatsapp_config(shop) or {}
     
     return templates.TemplateResponse("dashboard.html", {
