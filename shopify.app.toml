@@ -1,0 +1,25 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+name = "whatsapp-widget"
+client_id = "37f228eb325ae1506f0d2580bcd7c016"
+application_url = "http://localhost:3000"
+embedded = true
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_script_tags,read_themes"
+
+[auth]
+redirect_urls = [
+  "http://localhost:3000/api/auth/callback",
+]
+
+[webhooks]
+api_version = "2023-10"
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "quickstart-12345678.myshopify.com"

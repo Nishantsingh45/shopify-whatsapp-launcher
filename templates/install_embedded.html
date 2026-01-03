@@ -173,11 +173,48 @@
     </div>
 
     <script>
-        // Initialize Shopify App Bridge
-        const app = window.AppBridge.createApp({
-            apiKey: '{{ api_key }}',
-            host: new URLSearchParams(window.location.search).get('host')
+        // Initialize Shopify App Bridge 3.0
+        let app;
+        
+        function initializeAppBridge() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const apiKey = '{{ api_key }}';
+                const host = urlParams.get('host') || '{{ host }}';
+                
+                if (!apiKey || !host) {
+                    console.warn('Missing API key or host');
+                    return;
+                }
+                
+                // Initialize App Bridge
+                if (window.shopify && window.shopify.AppBridge) {
+                    app = window.shopify.AppBridge.createApp({
+                        apiKey: apiKey,
+                        host: host
+                    });
+                } else if (window.AppBridge) {
+                    app = window.AppBridge.createApp({
+                        apiKey: apiKey,
+                        host: host
+                    });
+                } else {
+                    console.warn('App Bridge not available');
+                }
+                
+                console.log('App Bridge initialized successfully');
+            } catch (error) {
+                console.error('Error initializing App Bridge:', error);
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeAppBridge();
         });
+        
+        // Also try immediately in case DOMContentLoaded already fired
+        initializeAppBridge();
 
         document.getElementById('install-btn').addEventListener('click', () => {
             const installBtn = document.getElementById('install-btn');

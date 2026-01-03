@@ -20,9 +20,10 @@ load_dotenv()
 app = FastAPI()
 
 # Add CORS middleware for embedded app
+# For embedded apps, we need to allow Shopify's domains
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # In production, specify exact Shopify domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -83,7 +84,7 @@ def verify_shopify_request(request: Request):
     return None
 
 def verify_session_token(session_token: str):
-    """Verify Shopify session token for embedded apps"""
+    """Verify Shopify session token for embedded apps (App Bridge 3.0)"""
     try:
         # Handle development tokens
         if session_token.startswith("dev-token-"):
@@ -91,14 +92,24 @@ def verify_session_token(session_token: str):
             return shop
         
         if session_token == "dev-token" or session_token == "fallback-token":
-            # For development, extract shop from request context if available
             return None
         
         # Decode without verification first to get the shop
         unverified = jwt.decode(session_token, options={"verify_signature": False})
-        shop = unverified.get("dest", "").replace("https://", "").replace("/admin", "")
+        dest = unverified.get("dest", "")
         
-        # Verify with secret
+        # Extract shop from dest (format: https://shop.myshopify.com/admin)
+        if dest:
+            shop = dest.replace("https://", "").replace("http://", "").replace("/admin", "").split("/")[0]
+        else:
+            # Fallback: try to get from iss
+            iss = unverified.get("iss", "")
+            shop = iss.replace("https://", "").replace("http://", "").split("/")[0] if iss else None
+        
+        if not shop:
+            return None
+        
+        # Verify with secret (App Bridge 3.0 uses API secret)
         payload = jwt.decode(
             session_token,
             SHOPIFY_API_SECRET,
@@ -107,7 +118,12 @@ def verify_session_token(session_token: str):
         )
         
         return shop
+    except jwt.ExpiredSignatureError:
+        return None
     except jwt.InvalidTokenError:
+        return None
+    except Exception as e:
+        print(f"Error verifying session token: {e}")
         return None
 
 @app.get("/")
@@ -186,8 +202,9 @@ async def dashboard(request: Request, shop: str):
 
 @app.get("/embedded", response_class=HTMLResponse)
 async def embedded_app(request: Request):
-    """Embedded app entry point"""
+    """Embedded app entry point with App Bridge 3.0"""
     shop = request.query_params.get("shop")
+    host = request.query_params.get("host")  # Required for App Bridge 3.0
     
     if not shop:
         raise HTTPException(status_code=400, detail="Shop parameter required")
@@ -204,52 +221,62 @@ async def embedded_app(request: Request):
         return templates.TemplateResponse("install_embedded.html", {
             "request": request,
             "shop": shop,
+            "host": host,
             "api_key": SHOPIFY_API_KEY,
             "app_url": APP_URL
         })
     
     current_config = db.get_whatsapp_config(shop) or {}
     
-    return templates.TemplateResponse("embedded_dashboard.html", {
+    # Create response with CSP headers for embedded app
+    response = templates.TemplateResponse("embedded_dashboard.html", {
         "request": request,
         "shop": shop,
+        "host": host,
         "config": current_config,
         "api_key": SHOPIFY_API_KEY,
         "app_url": APP_URL
     })
+    
+    # Add Content Security Policy for embedded apps
+    response.headers["Content-Security-Policy"] = (
+        "frame-ancestors https://*.myshopify.com https://admin.shopify.com; "
+        "default-src 'self' https://cdn.shopify.com https://*.myshopify.com; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.shopify.com; "
+        "style-src 'self' 'unsafe-inline' https://cdn.shopify.com; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' https://cdn.shopify.com; "
+        "connect-src 'self' https://*.myshopify.com https://admin.shopify.com"
+    )
+    
+    return response
 
 @app.post("/api/configure-whatsapp")
 async def api_configure_whatsapp(
     request: Request,
     authorization: Optional[str] = Header(None)
 ):
-    """API endpoint for embedded app WhatsApp configuration"""
-    # Get session token from Authorization header
-    if not authorization or not authorization.startswith("Bearer "):
-        # Fallback: try to get shop from request body for development
+    """API endpoint for embedded app WhatsApp configuration with App Bridge 3.0"""
+    shop = None
+    
+    # Try to get session token from Authorization header (App Bridge 3.0)
+    if authorization and authorization.startswith("Bearer "):
+        session_token = authorization.replace("Bearer ", "")
+        shop = verify_session_token(session_token)
+    
+    # Fallback: try to get shop from request body (for development/testing)
+    if not shop:
         try:
             form_data = await request.json()
             shop = form_data.get("shop")
-            if shop and db.get_installation(shop):
-                # Allow for development/testing
-                pass
-            else:
-                raise HTTPException(status_code=401, detail="Missing session token")
+            # Only allow if app is installed (security check)
+            if shop and not db.get_installation(shop):
+                shop = None
         except:
-            raise HTTPException(status_code=401, detail="Missing session token")
-    else:
-        session_token = authorization.replace("Bearer ", "")
-        shop = verify_session_token(session_token)
-        
-        if not shop:
-            # Try to get shop from request body as fallback
-            try:
-                form_data = await request.json()
-                shop = form_data.get("shop")
-                if not shop or not db.get_installation(shop):
-                    raise HTTPException(status_code=401, detail="Invalid session token")
-            except:
-                raise HTTPException(status_code=401, detail="Invalid session token")
+            pass
+    
+    if not shop:
+        raise HTTPException(status_code=401, detail="Missing or invalid session token")
     
     installation = db.get_installation(shop)
     if not installation:
@@ -271,21 +298,32 @@ async def api_configure_whatsapp(
     db.save_whatsapp_config(shop, phone_number, initial_message)
     
     # Install script tag in Shopify store
-    #await (shop)
+    try:
+        await install_script_tag(shop)
+    except Exception as e:
+        print(f"Error installing script tag: {e}")
+        # Don't fail the request if script tag installation fails
     
     return JSONResponse({"success": True, "message": "Configuration saved successfully"})
 
 @app.get("/api/config")
 async def get_config(request: Request, authorization: Optional[str] = Header(None)):
-    """Get current WhatsApp configuration for embedded app"""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing session token")
+    """Get current WhatsApp configuration for embedded app with App Bridge 3.0"""
+    shop = None
     
-    session_token = authorization.replace("Bearer ", "")
-    shop = verify_session_token(session_token)
+    # Try to get session token from Authorization header
+    if authorization and authorization.startswith("Bearer "):
+        session_token = authorization.replace("Bearer ", "")
+        shop = verify_session_token(session_token)
+    
+    # Fallback: try to get shop from query params (for development)
+    if not shop:
+        shop = request.query_params.get("shop")
+        if shop and not db.get_installation(shop):
+            shop = None
     
     if not shop:
-        raise HTTPException(status_code=401, detail="Invalid session token")
+        raise HTTPException(status_code=401, detail="Missing or invalid session token")
     
     config = db.get_whatsapp_config(shop) or {}
     return JSONResponse(config)
@@ -471,15 +509,22 @@ async def widget_click(request: Request):
 
 @app.get("/api/analytics")
 async def get_analytics(request: Request, authorization: Optional[str] = Header(None)):
-    """Get analytics data for embedded app"""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing session token")
+    """Get analytics data for embedded app with App Bridge 3.0"""
+    shop = None
     
-    session_token = authorization.replace("Bearer ", "")
-    shop = verify_session_token(session_token)
+    # Try to get session token from Authorization header
+    if authorization and authorization.startswith("Bearer "):
+        session_token = authorization.replace("Bearer ", "")
+        shop = verify_session_token(session_token)
+    
+    # Fallback: try to get shop from query params (for development)
+    if not shop:
+        shop = request.query_params.get("shop")
+        if shop and not db.get_installation(shop):
+            shop = None
     
     if not shop:
-        raise HTTPException(status_code=401, detail="Invalid session token")
+        raise HTTPException(status_code=401, detail="Missing or invalid session token")
     
     analytics = db.get_analytics(shop)
     return JSONResponse(analytics)
